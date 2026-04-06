@@ -1,0 +1,183 @@
+<template>
+  <AppShell>
+    <section class="grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
+      <div class="space-y-5">
+        <div class="panel overflow-hidden p-5">
+          <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Weekly board</p>
+          <h1 class="mt-3 font-display text-4xl font-bold leading-tight text-ink">
+            Organize padel matches without forcing players to sign up.
+          </h1>
+          <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+            Browse weekly schedules, request a spot in seconds, and let admins approve players into the four available match slots.
+          </p>
+        </div>
+
+        <div class="panel p-4">
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p class="text-sm font-semibold">Weeks</p>
+              <p class="text-xs text-slate-500">Monday to Sunday schedule view</p>
+            </div>
+          </div>
+          <WeekTabs :weeks="weekTabs" :active-week-id="activeWeekId" />
+        </div>
+
+        <div class="panel p-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="text-sm font-semibold">Filter by level</p>
+              <p class="text-xs text-slate-500">Only show the levels you want to play</p>
+            </div>
+            <select v-model="selectedLevel" class="field w-full sm:max-w-xs">
+              <option value="">All levels</option>
+              <option v-for="level in levels" :key="level" :value="level">{{ level }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <MatchCard
+            v-for="match in visibleMatches"
+            :key="match.id"
+            :match="match"
+            :current-player-name="trimmedName"
+            :is-pending="pendingMatchIds.includes(match.id)"
+            @join="openJoinModal(match)"
+          />
+
+          <div v-if="!loading && visibleMatches.length === 0" class="panel p-6 text-sm text-slate-600">
+            No matches found for this week and filter.
+          </div>
+        </div>
+      </div>
+
+      <aside class="space-y-5">
+        <div class="panel p-5">
+          <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Player name</p>
+          <h2 class="mt-2 font-display text-2xl font-bold">Stay recognized on this device</h2>
+          <input
+            v-model="playerName"
+            class="field mt-4"
+            placeholder="Type your name once"
+            maxlength="40"
+          />
+          <p class="mt-3 text-sm leading-6 text-slate-600">
+            Your saved name is prefilled when you join future matches and helps highlight your pending requests.
+          </p>
+        </div>
+
+        <div class="panel p-5">
+          <p class="text-xs uppercase tracking-[0.22em] text-slate-500">How it works</p>
+          <ol class="mt-4 space-y-3 text-sm leading-6 text-slate-700">
+            <li>Pick a match and tap Join.</li>
+            <li>Your request goes to a private waiting list.</li>
+            <li>An admin approves players into the first open slot.</li>
+          </ol>
+        </div>
+      </aside>
+    </section>
+
+    <JoinModal
+      v-if="selectedMatch"
+      v-model="joinName"
+      :title="selectedMatch.level"
+      :submitting="joining"
+      :error="joinError"
+      @close="selectedMatch = null"
+      @submit="submitJoin"
+    />
+  </AppShell>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import AppShell from '../layouts/AppShell.vue'
+import MatchCard from '../components/public/MatchCard.vue'
+import WeekTabs from '../components/public/WeekTabs.vue'
+import JoinModal from '../components/public/JoinModal.vue'
+import { buildWeekBuckets, createPendingRegistration, fetchPublicMatches } from '../lib/api'
+import { usePlayerName } from '../composables/usePlayerName'
+import { getWeekId } from '../lib/utils'
+import type { MatchWithPlayers } from '../lib/types'
+
+const route = useRoute()
+const router = useRouter()
+
+const loading = ref(true)
+const joining = ref(false)
+const joinError = ref('')
+const allMatches = ref<MatchWithPlayers[]>([])
+const selectedMatch = ref<MatchWithPlayers | null>(null)
+const selectedLevel = ref('')
+const joinName = ref('')
+
+const { playerName, trimmedName, pendingMatchIds, setPlayerName, markPending } = usePlayerName()
+
+const weekBuckets = computed(() => buildWeekBuckets(allMatches.value))
+const weekTabs = computed(() => weekBuckets.value.map(({ weekId, label, endLabel }) => ({ weekId, label, endLabel })))
+const fallbackWeekId = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+  return getWeekId(today)
+})
+
+const activeWeekId = computed(() => {
+  if (route.params.weekId && route.params.weekId !== 'current') {
+    return String(route.params.weekId)
+  }
+
+  return weekBuckets.value.find((week) => week.weekId === fallbackWeekId.value)?.weekId ?? weekBuckets.value[0]?.weekId ?? fallbackWeekId.value
+})
+
+const levels = computed(() =>
+  Array.from(new Set(allMatches.value.map((match) => match.level))).sort((left, right) => left.localeCompare(right))
+)
+
+const visibleMatches = computed(() => {
+  const currentWeek = weekBuckets.value.find((week) => week.weekId === activeWeekId.value)
+  const matches = currentWeek?.matches ?? []
+
+  return selectedLevel.value ? matches.filter((match) => match.level === selectedLevel.value) : matches
+})
+
+async function loadMatches() {
+  loading.value = true
+
+  try {
+    allMatches.value = await fetchPublicMatches()
+
+    if (route.path === '/week/current' && weekBuckets.value.length > 0) {
+      const currentWeek = weekBuckets.value.find((week) => week.weekId === fallbackWeekId.value) ?? weekBuckets.value[0]
+      router.replace(`/week/${currentWeek.weekId}`)
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+function openJoinModal(match: MatchWithPlayers) {
+  selectedMatch.value = match
+  joinName.value = trimmedName.value
+  joinError.value = ''
+}
+
+async function submitJoin(value: string) {
+  if (!selectedMatch.value) return
+
+  joining.value = true
+  joinError.value = ''
+
+  try {
+    await createPendingRegistration(selectedMatch.value.id, value)
+    setPlayerName(value.trim())
+    markPending(selectedMatch.value.id)
+    selectedMatch.value = null
+  } catch (error) {
+    joinError.value = error instanceof Error ? error.message : 'Unable to join this match.'
+  } finally {
+    joining.value = false
+  }
+}
+
+onMounted(loadMatches)
+</script>
