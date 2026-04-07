@@ -1,19 +1,19 @@
 <template>
   <AppShell>
-    <section class="grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
-      <div class="space-y-5">
-        <div class="panel overflow-hidden p-5">
+    <section class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
+      <div class="space-y-4">
+        <div class="panel overflow-hidden p-4 sm:p-5">
           <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Weekly board</p>
-          <h1 class="mt-3 font-display text-4xl font-bold leading-tight text-ink">
-            Organize padel matches without forcing players to sign up.
+          <h1 class="mt-2 font-display text-2xl font-bold leading-tight text-ink sm:text-4xl">
+            Weekly padel schedule
           </h1>
-          <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-            Browse weekly schedules, request a spot in seconds, and let admins approve players into the four available match slots.
+          <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Browse upcoming matches and join the waiting list in a couple of taps.
           </p>
         </div>
 
         <div class="panel p-4">
-          <div class="mb-4 flex items-center justify-between gap-3">
+          <div class="mb-3 flex items-center justify-between gap-3">
             <div>
               <p class="text-sm font-semibold">Weeks</p>
               <p class="text-xs text-slate-500">Monday to Sunday schedule view</p>
@@ -35,7 +35,7 @@
           </div>
         </div>
 
-        <div class="space-y-4">
+        <div class="space-y-3">
           <MatchCard
             v-for="match in visibleMatches"
             :key="match.id"
@@ -51,8 +51,8 @@
         </div>
       </div>
 
-      <aside class="space-y-5">
-        <div class="panel p-5">
+      <aside class="space-y-4">
+        <div class="panel p-4 sm:p-5">
           <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Player name</p>
           <h2 class="mt-2 font-display text-2xl font-bold">Stay recognized on this device</h2>
           <input
@@ -66,7 +66,7 @@
           </p>
         </div>
 
-        <div class="panel p-5">
+        <div class="panel hidden p-4 sm:block sm:p-5">
           <p class="text-xs uppercase tracking-[0.22em] text-slate-500">How it works</p>
           <ol class="mt-4 space-y-3 text-sm leading-6 text-slate-700">
             <li>Pick a match and tap Join.</li>
@@ -92,6 +92,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { addWeeks, format, startOfWeek } from 'date-fns'
 import AppShell from '../layouts/AppShell.vue'
 import MatchCard from '../components/public/MatchCard.vue'
 import WeekTabs from '../components/public/WeekTabs.vue'
@@ -115,18 +116,33 @@ const joinName = ref('')
 const { playerName, trimmedName, pendingMatchIds, setPlayerName, markPending } = usePlayerName()
 
 const weekBuckets = computed(() => buildWeekBuckets(allMatches.value))
-const weekTabs = computed(() => weekBuckets.value.map(({ weekId, label, endLabel }) => ({ weekId, label, endLabel })))
-const fallbackWeekId = computed(() => {
-  const today = new Date().toISOString().slice(0, 10)
-  return getWeekId(today)
-})
+const today = new Date()
+const fallbackWeekId = computed(() => format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
+const nextWeekId = computed(() => format(addWeeks(startOfWeek(today, { weekStartsOn: 1 }), 1), 'yyyy-MM-dd'))
+const allowedWeekIds = computed(() => [fallbackWeekId.value, nextWeekId.value])
+const publicWeekBuckets = computed(() =>
+  allowedWeekIds.value
+    .map((weekId) => weekBuckets.value.find((week) => week.weekId === weekId))
+    .filter((week): week is NonNullable<typeof weekBuckets.value[number]> => Boolean(week))
+)
+const weekTabs = computed(() =>
+  publicWeekBuckets.value.map(({ weekId, label, endLabel }) => ({
+    weekId,
+    label,
+    endLabel,
+    isCurrent: weekId === fallbackWeekId.value
+  }))
+)
 
 const activeWeekId = computed(() => {
   if (route.params.weekId && route.params.weekId !== 'current') {
-    return String(route.params.weekId)
+    const requestedWeekId = String(route.params.weekId)
+    if (allowedWeekIds.value.includes(requestedWeekId)) {
+      return requestedWeekId
+    }
   }
 
-  return weekBuckets.value.find((week) => week.weekId === fallbackWeekId.value)?.weekId ?? weekBuckets.value[0]?.weekId ?? fallbackWeekId.value
+  return publicWeekBuckets.value.find((week) => week.weekId === fallbackWeekId.value)?.weekId ?? publicWeekBuckets.value[0]?.weekId ?? fallbackWeekId.value
 })
 
 const levels = computed(() =>
@@ -146,9 +162,19 @@ async function loadMatches() {
   try {
     allMatches.value = await fetchPublicMatches()
 
-    if (route.path === '/week/current' && weekBuckets.value.length > 0) {
-      const currentWeek = weekBuckets.value.find((week) => week.weekId === fallbackWeekId.value) ?? weekBuckets.value[0]
+    if (route.path === '/week/current' && publicWeekBuckets.value.length > 0) {
+      const currentWeek =
+        publicWeekBuckets.value.find((week) => week.weekId === fallbackWeekId.value) ?? publicWeekBuckets.value[0]
       router.replace(`/week/${currentWeek.weekId}`)
+      return
+    }
+
+    if (
+      route.params.weekId &&
+      route.params.weekId !== 'current' &&
+      !allowedWeekIds.value.includes(String(route.params.weekId))
+    ) {
+      router.replace(`/week/${fallbackWeekId.value}`)
     }
   } finally {
     loading.value = false

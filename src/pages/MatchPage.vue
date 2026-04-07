@@ -4,7 +4,10 @@
       <section class="space-y-5">
         <div class="panel p-6">
           <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Match details</p>
-          <h1 class="mt-2 font-display text-4xl font-bold">{{ match.level }}</h1>
+          <div class="mt-3 flex flex-wrap items-center gap-3">
+            <h1 class="font-display text-4xl font-bold">{{ match.level }}</h1>
+            <span class="pill" :class="getLevelBadgeClass(match.level)">{{ match.level }}</span>
+          </div>
           <p class="mt-2 text-lg text-slate-700">{{ formatMatchDate(match.date) }} · {{ formatMatchTime(match.start_time, match.end_time) }}</p>
           <div class="mt-5 flex flex-wrap gap-3">
             <span class="pill bg-court-100 text-court-800">{{ getDerivedMatchStatus(match) }}</span>
@@ -59,7 +62,13 @@ import PlayerSlots from '../components/public/PlayerSlots.vue'
 import ShareButton from '../components/public/ShareButton.vue'
 import { createPendingRegistration, fetchMatchById } from '../lib/api'
 import { usePlayerName } from '../composables/usePlayerName'
-import { formatMatchDate, formatMatchTime, getDerivedMatchStatus, shareTextForMatch } from '../lib/utils'
+import {
+  formatMatchDate,
+  formatMatchTime,
+  getDerivedMatchStatus,
+  getLevelBadgeClass,
+  shareTextForMatch
+} from '../lib/utils'
 import type { MatchWithPlayers } from '../lib/types'
 
 const route = useRoute()

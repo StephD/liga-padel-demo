@@ -1,26 +1,30 @@
 <template>
-  <div class="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+  <div class="grid grid-cols-2 gap-2 sm:flex sm:gap-3 sm:overflow-x-auto sm:pb-1">
     <RouterLink
       v-for="week in weeks"
       :key="week.weekId"
       :to="`/week/${week.weekId}`"
-      class="min-w-[9.5rem] rounded-2xl border px-4 py-3 transition"
+      class="min-w-0 rounded-2xl border px-3 py-3 transition sm:min-w-[9.5rem] sm:px-4"
       :class="
-        activeWeekId === week.weekId
+        week.isCurrent
           ? 'border-court-500 bg-court-600 text-white'
-          : 'border-white/70 bg-white/80 text-slate-700'
+          : activeWeekId === week.weekId
+            ? 'border-slate-400 bg-slate-50 text-slate-800 shadow-sm'
+            : 'border-slate-300 bg-white text-slate-700'
       "
     >
-      <p class="text-xs uppercase tracking-[0.18em] opacity-80">Week</p>
-      <p class="mt-1 font-display text-base font-bold">{{ week.label }}</p>
-      <p class="text-xs opacity-80">{{ week.endLabel }}</p>
+      <p class="text-[10px] uppercase tracking-[0.18em] opacity-80 sm:text-xs">
+        {{ week.isCurrent ? 'This week' : 'Next week' }}
+      </p>
+      <p class="mt-1 font-display text-lg font-bold leading-none sm:text-base">{{ week.label }}</p>
+      <p class="mt-1 text-xs opacity-80">{{ week.endLabel }}</p>
     </RouterLink>
   </div>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  weeks: { weekId: string; label: string; endLabel: string }[]
+  weeks: { weekId: string; label: string; endLabel: string; isCurrent: boolean }[]
   activeWeekId: string
 }>()
 </script>

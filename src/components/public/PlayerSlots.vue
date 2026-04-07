@@ -3,7 +3,7 @@
     <div
       v-for="slot in 4"
       :key="slot"
-      class="rounded-2xl border px-3 py-3 text-sm"
+      class="min-w-0 rounded-xl border px-2 py-2 text-xs"
       :class="
         approvedPlayers[slot - 1]
           ? approvedPlayers[slot - 1].player_name === currentPlayerName
@@ -12,11 +12,11 @@
           : 'border-dashed border-slate-200 bg-white text-slate-400'
       "
     >
-      <p class="text-[11px] uppercase tracking-[0.18em]">
-        {{ approvedPlayers[slot - 1] ? 'Player' : 'Open slot' }}
+      <p class="text-[10px] uppercase tracking-[0.16em]">
+        {{ approvedPlayers[slot - 1] ? 'Player' : 'Open' }}
       </p>
-      <p class="mt-1 truncate font-medium">
-        {{ approvedPlayers[slot - 1]?.player_name ?? 'Waiting for approval' }}
+      <p class="mt-1 truncate text-sm font-medium">
+        {{ approvedPlayers[slot - 1]?.player_name ?? 'Available' }}
       </p>
     </div>
   </div>
